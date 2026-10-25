@@ -1,0 +1,48 @@
+diff --git a/src/platform_io/manager.py b/src/platform_io/manager.py
+index 4a434a6..fa8a3ba 100644
+--- a/src/platform_io/manager.py
++++ b/src/platform_io/manager.py
+@@ -536,14 +536,37 @@ class PlatformIOManager:
+ 
+         receipts: List[DeliveryReceipt] = []
+         group_info = message.message_info.group_info
+-        chat_type = "group" if group_info is not None else "private"
+         # 出站 user_info 是机器人自身，私聊目标必须与传输层的接收者字段一致。
+         additional_config = message.message_info.additional_config or {}
+-        target_id = (
+-            group_info.group_id
+-            if group_info is not None
+-            else str(additional_config.get("platform_io_target_user_id") or "").strip()
+-        )
++        # ⚠ **群会话的出站消息不一定带 group_info**（插件主动触发那条就没有）。
++        # 而 ``send_service._inherit_platform_io_route_metadata`` 已经把群号/QQ 号
++        # 写进 ``additional_config`` 了（``platform_io_target_group_id`` /
++        # ``platform_io_target_user_id``）——原来这里**只读 group_info.group_id**，
++        # 等于把已经继承下来的目标丢在地上：主动触发的群消息于是被判成
++        # ``chat_type=private`` + ``target_id=""`` → adapter_policy 判
++        # ``missing_target_id`` 直接 DROPPED → 重试才送达 →
++        # **表现就是聊天中途卡住 40~50 秒**（2026-10-18 实测，一天 9 次）。
++        # 修法：group_info 缺失时回退到已继承的群目标，再回退到私聊目标。
++        target_id = ""
++        if group_info is not None:
++            chat_type = "group"
++            target_id = str(getattr(group_info, "group_id", "") or "").strip()
++            if not target_id:
++                target_id = str(
++                    additional_config.get("platform_io_target_group_id") or ""
++                ).strip()
++        else:
++            inherited_group_id = str(
++                additional_config.get("platform_io_target_group_id") or ""
++            ).strip()
++            if inherited_group_id:
++                chat_type = "group"
++                target_id = inherited_group_id
++            else:
++                chat_type = "private"
++                target_id = str(
++                    additional_config.get("platform_io_target_user_id") or ""
++                ).strip()
+         for driver in drivers:
+             policy_result = await self.evaluate_target_policy(driver, route_key, chat_type, target_id)
+             if not policy_result.allowed:

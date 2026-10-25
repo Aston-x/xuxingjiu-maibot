@@ -1,0 +1,23 @@
+# 统一按文本处理，避免 Windows/Linux 换行差异把 diff 搞脏
+* text=auto eol=lf
+
+*.md   text diff=markdown
+*.toml text
+*.py   text diff=python
+*.bat  text eol=crlf
+*.sh   text eol=lf
+*.ps1  text eol=crlf
+*.json text
+*.yml  text
+*.yaml text
+
+# 二进制
+*.wav  binary
+*.mp3  binary
+*.m4a  binary
+*.ogg  binary
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.ckpt binary
+*.pth  binary

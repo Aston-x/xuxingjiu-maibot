@@ -1,0 +1,49 @@
+# 运行时与凭据（绝不入仓）
+config/
+plugins/
+data/
+logs/
+*.db
+*.sqlite3
+*.jsonl
+cookies.json
+*.log
+.env
+.env.*
+
+# 凭据
+*key*
+*secret*
+*token*
+*cookie*
+!patches/*.patch
+
+# 模型与素材
+*.ckpt
+*.pth
+*.onnx
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.safetensors
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# 打包
+dist/
+build/
+*.egg-info/

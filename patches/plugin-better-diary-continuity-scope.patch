@@ -1,0 +1,37 @@
+diff --git a/plugins/org_orge-8_better-diary/plugin.py b/plugins/org_orge-8_better-diary/plugin.py
+index 6906fd1..d3f28cc 100644
+--- a/plugins/org_orge-8_better-diary/plugin.py
++++ b/plugins/org_orge-8_better-diary/plugin.py
+@@ -2562,8 +2562,31 @@ class BetterDiaryPlugin(MaiBotPlugin):
+ 
+     # ------------------------------------------------------------ 跨天连续性
+ 
++    def _continuity_scope(self) -> str:
++        """连续性按**取材范围**分桶（2026-10-21 本机补丁）。
++
++        为什么：跨天连续性会把「前几篇日记留下的线索」拼进提示词
++        （`build_continuity_line`：上一次写到 / 还在聊的话题 / 手头还在进行的事 / 还没个结果的）。
++        而 `continuity.json` 原本是**全局一份** → 修复前那些从私聊取材的日记
++        沉淀下来的私聊事实（二十元交易争议 / 小红书卖AI头像 / 画窗台上的自己…）
++        会被后来的群日记引用，然后**公开发到 QQ 空间**。
++        实测 2026-10-21 23:30 那条群日记就是这么带上了「二十元交易争议也还悬着」
++        「窗台上的画像还没画出来」。
++
++        → 按 target_chats 派生一个桶名，不同取材范围各存各的连续性。
++        """
++        targets = sorted({
++            str(t).strip() for t in (self.config.diary.target_chats or []) if str(t).strip()
++        })
++        if not targets:
++            return "all"
++        import hashlib
++
++        key = "|".join(targets)
++        return hashlib.md5(key.encode("utf-8")).hexdigest()[:10]
++
+     def _continuity_path(self) -> Path:
+-        return self._data_dir() / "continuity.json"
++        return self._data_dir() / f"continuity-{self._continuity_scope()}.json"
+ 
+     def _load_continuity(self) -> dict[str, Any]:
+         """读跨天连续性状态。坏即空（连续性缺失只影响「延续感」，不影响成品）。"""

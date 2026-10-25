@@ -1,0 +1,24 @@
+diff --git a/src/A_memorix/core/utils/summary_importer.py b/src/A_memorix/core/utils/summary_importer.py
+index d38eeb14d..b009a9668 100644
+--- a/src/A_memorix/core/utils/summary_importer.py
++++ b/src/A_memorix/core/utils/summary_importer.py
+@@ -681,12 +681,19 @@ class SummaryImporter:
+ 
+             # 2. 获取历史消息
+             query_time_end = time.time() if time_end is None else float(time_end)
++            # 2026-10-21（本机补丁）：filter_mai / filter_command 默认是 False，
++            # 于是 **bot 自己发的消息、命令消息、插件以 ctx.send.text 发出的【系统通知】**
++            # 全都会进摘要 → 进长期记忆 → 变成她"记得"的假内容。
++            # 实测：impression-card 的【系统·印象卡片】被写进了中期记忆的"参与人物"。
++            # 现在只让**用户说的话**进摘要。
+             messages = message_api.get_messages_by_time_in_chat(
+                 chat_id=stream_id,
+                 start_time=0.0,
+                 end_time=query_time_end,
+                 limit=context_length,
+                 limit_mode="latest",
++                filter_mai=True,
++                filter_command=True,
+             )
+ 
+             if not messages:

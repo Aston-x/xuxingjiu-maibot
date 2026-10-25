@@ -1,0 +1,345 @@
+diff --git a/plugins/com_0-hz_impression-card/plugin.py b/plugins/com_0-hz_impression-card/plugin.py
+index fd39625..d0d9b7f 100644
+--- a/plugins/com_0-hz_impression-card/plugin.py
++++ b/plugins/com_0-hz_impression-card/plugin.py
+@@ -340,6 +340,20 @@ def _names_equal(a: str, b: str) -> bool:
+     return False
+ 
+ 
++def _split_scope(person_id: str) -> tuple[str, str]:
++    """拆开「人 ID#会话 ID」。
++
++    2026-10-21 本机补丁：卡片主键带会话维度后，库里存的是「raw#scope」，
++    而 ctx.db / ctx.person 只认 raw —— 凡是拿库里 person_id 回查宿主的地方，
++    都要先拆一下。
++    """
++    pid = str(person_id or "").strip()
++    if "#" in pid:
++        base, _, scope = pid.partition("#")
++        return base, scope
++    return pid, ""
++
++
+ def _normalize_person_target(raw: str) -> str:
+     """清理工具/命令传入的人物指称（@、括号、别名前缀等）。"""
+     text = str(raw or "").strip()
+@@ -1877,14 +1891,29 @@ class AffinityStore:
+     async def get(self, person_id: str) -> Optional[AffinityRecord]:
+         return await asyncio.to_thread(self._get_sync, person_id)
+ 
+-    async def find_by_display_name(self, name: str) -> Optional[AffinityRecord]:
+-        return await asyncio.to_thread(self._find_by_display_name_sync, name)
++    async def find_by_display_name(self, name: str, scope_id: str = "") -> Optional[AffinityRecord]:
++        return await asyncio.to_thread(self._find_by_display_name_sync, name, scope_id)
+ 
+-    def _find_by_display_name_sync(self, name: str) -> Optional[AffinityRecord]:
++    def _find_by_display_name_sync(self, name: str, scope_id: str = "") -> Optional[AffinityRecord]:
+         clean = str(name or "").strip()
+         if not clean:
+             return None
+         conn = self._connect()
++        scope = str(scope_id or "").strip()
++        if scope:
++            # 2026-10-21 本机补丁：卡片按会话隔离后，同一个人会有多张卡，
++            # 优先取「当前会话」那张。
++            cur = conn.execute(
++                "SELECT person_id, platform, user_id, display_name, total, scores, description, updated_at "
++                "FROM affinity WHERE display_name = ? COLLATE NOCASE AND person_id LIKE ? LIMIT 1",
++                (clean, f"%#{scope}"),
++            )
++            rows = cur.fetchall()
++            if len(rows) == 1:
++                return self._row_to_record(rows[0])
++            # 当前会话还没有卡 → **直接返回无**。
++            # ⚠ 这里绝不能回退去取别的会话那张：那就是私聊内容漏进群里的老问题。
++            return None
+         cur = conn.execute(
+             "SELECT person_id, platform, user_id, display_name, total, scores, description, updated_at "
+             "FROM affinity WHERE display_name = ? COLLATE NOCASE LIMIT 2",
+@@ -2385,7 +2414,9 @@ class AffinityPlugin(MaiBotPlugin):
+                     self.ctx.logger.debug(
+                         "印象卡片定期提醒解析人物失败 user=%s: %s", speaker.user_id, exc
+                     )
+-                record = await self._store.get(person_id) if person_id else None
++                # 2026-10-21 本机补丁：简报按会话取卡，避免群里的简报显示私聊那张。
++                card_key = f"{person_id}#{stream_id}" if (person_id and stream_id) else person_id
++                record = await self._store.get(card_key) if card_key else None
+                 if record:
+                     people.append(
+                         BriefingPerson(
+@@ -2572,7 +2603,9 @@ class AffinityPlugin(MaiBotPlugin):
+     # ------------------------------------------------------------------ #
+     # 人物解析
+     # ------------------------------------------------------------------ #
+-    async def _person_from_user(self, platform: str, user_id: str) -> Optional[PersonRef]:
++    async def _person_from_user(
++        self, platform: str, user_id: str, scope_id: str = ""
++    ) -> Optional[PersonRef]:
+         platform = (platform or "qq").strip()
+         user_id = str(user_id or "").strip()
+         if not user_id:
+@@ -2580,16 +2613,18 @@ class AffinityPlugin(MaiBotPlugin):
+         person_id = await self.ctx.person.get_id(platform, user_id)
+         if not person_id:
+             return None
+-        return await self._enrich_person(person_id, platform, user_id)
++        return await self._enrich_person(person_id, platform, user_id, scope_id=scope_id)
+ 
+-    async def _person_from_name(self, name: str, *, group_id: str = "") -> Optional[PersonRef]:
++    async def _person_from_name(
++        self, name: str, *, group_id: str = "", scope_id: str = ""
++    ) -> Optional[PersonRef]:
+         name = _normalize_person_target(name)
+         if not name:
+             return None
+ 
+         person_id = await self.ctx.person.get_id_by_name(name)
+         if person_id:
+-            ref = await self._enrich_person(str(person_id), "", "")
++            ref = await self._enrich_person(str(person_id), "", "", scope_id=scope_id)
+             if ref:
+                 return ref
+ 
+@@ -2600,7 +2635,7 @@ class AffinityPlugin(MaiBotPlugin):
+                 single_result=True,
+             )
+             if isinstance(info, Mapping) and info.get("person_id"):
+-                ref = await self._enrich_person(str(info["person_id"]), "", "")
++                ref = await self._enrich_person(str(info["person_id"]), "", "", scope_id=scope_id)
+                 if ref:
+                     return ref
+ 
+@@ -2609,13 +2644,17 @@ class AffinityPlugin(MaiBotPlugin):
+             return card_ref
+ 
+         if self._store is not None:
+-            record = await self._store.find_by_display_name(name)
++            record = await self._store.find_by_display_name(name, scope_id=scope_id)
+             if record is not None:
+-                ref = await self._enrich_person(record.person_id, record.platform, record.user_id)
++                # 2026-10-21：record.person_id 带 scope；_enrich_person 会拆开，
++                # 但当前会话优先，所以显式把 scope_id 传进去。
++                ref = await self._enrich_person(
++                    record.person_id, record.platform, record.user_id, scope_id=scope_id
++                )
+                 if ref:
+                     return ref
+ 
+-        ref = await self._enrich_person(name, "", "")
++        ref = await self._enrich_person(name, "", "", scope_id=scope_id)
+         return ref
+ 
+     async def _person_from_group_cardname(self, name: str, *, group_id: str = "") -> Optional[PersonRef]:
+@@ -2643,21 +2682,36 @@ class AffinityPlugin(MaiBotPlugin):
+         person_id = str(matches[0].get("person_id") or "").strip()
+         if not person_id:
+             return None
+-        return await self._enrich_person(person_id, "", "")
++        return await self._enrich_person(person_id, "", "", scope_id=scope_id)
+ 
+-    async def _enrich_person(self, person_id: str, platform: str, user_id: str) -> Optional[PersonRef]:
++    async def _enrich_person(
++        self,
++        person_id: str,
++        platform: str,
++        user_id: str,
++        scope_id: str = "",
++    ) -> Optional[PersonRef]:
++        """scope_id = 当前会话 ID。
++
++        2026-10-21 本机补丁：卡片按会话隔离。
++        传入的 person_id 可能是库里带 scope 的「raw#scope」，先拆开，
++        宿主侧（ctx.db / ctx.person）始终用 raw。
++        """
++        host_pid, embedded_scope = _split_scope(person_id)
++        scope = str(scope_id or "").strip() or embedded_scope
+         info = await self.ctx.db.get(
+             model_name="PersonInfo",
+-            filters={"person_id": person_id},
++            filters={"person_id": host_pid},
+             single_result=True,
+         )
+         if not isinstance(info, Mapping):
+             if not (platform and user_id):
+                 return None
+-            ref = PersonRef(person_id=person_id, platform=platform, user_id=user_id)
++            ref = PersonRef(person_id=host_pid, platform=platform, user_id=user_id, scope_id=scope)
+             return ref
+         ref = PersonRef(
+-            person_id=person_id,
++            person_id=host_pid,
++            scope_id=scope,
+             platform=str(info.get("platform") or platform or "qq"),
+             user_id=str(info.get("user_id") or user_id or ""),
+             user_nickname=str(info.get("user_nickname") or ""),
+@@ -2803,18 +2857,20 @@ class AffinityPlugin(MaiBotPlugin):
+         """
+         platform, caller_uid, group_id = _caller_identity(kwargs)
+         target = str(target or "").strip()
++        # 2026-10-21 本机补丁：卡片按会话隔离 —— 作用域取当前会话。
++        scope_id = _resolve_stream_id(kwargs)
+ 
+         if not target:
+             if not caller_uid:
+                 return None, "没有指定对象，也拿不到当前发言者身份。"
+-            ref = await self._person_from_user(platform, caller_uid)
++            ref = await self._person_from_user(platform, caller_uid, scope_id=scope_id)
+             return (ref, "") if ref else (None, "找不到当前发言者的人物信息。")
+ 
+         if target.isdigit():
+-            ref = await self._person_from_user(platform, target)
++            ref = await self._person_from_user(platform, target, scope_id=scope_id)
+             return (ref, "") if ref else (None, f"找不到 user_id={target} 对应的人物。")
+ 
+-        ref = await self._person_from_name(target, group_id=group_id)
++        ref = await self._person_from_name(target, group_id=group_id, scope_id=scope_id)
+         if ref:
+             return ref, ""
+         normalized = _normalize_person_target(target)
+@@ -2829,18 +2885,18 @@ class AffinityPlugin(MaiBotPlugin):
+     async def _load_or_create(self, ref: PersonRef, stream_id: str) -> AffinityRecord:
+         """读取记录；不存在则冷启动生成并落库。"""
+         assert self._store is not None
+-        record = await self._store.get(ref.person_id)
++        record = await self._store.get(ref.card_key)
+         if record is not None:
+             return record
+         # 同一个人并发触发时只生成一次
+-        lock = self._gen_locks.setdefault(ref.person_id, asyncio.Lock())
++        lock = self._gen_locks.setdefault(ref.card_key, asyncio.Lock())
+         async with lock:
+-            record = await self._store.get(ref.person_id)
++            record = await self._store.get(ref.card_key)
+             if record is not None:
+                 return record
+             record = await self._generate_record(ref, stream_id, existing=None)
+             await self._store.upsert(record)
+-            self._maybe_schedule_storage_compact(ref.person_id, ref.display_name, record.description)
++            self._maybe_schedule_storage_compact(ref.card_key, ref.display_name, record.description)
+         return record
+ 
+     # ------------------------------------------------------------------ #
+@@ -2941,7 +2997,7 @@ class AffinityPlugin(MaiBotPlugin):
+     async def _apply_delta(self, ref: PersonRef, dim_key: str, delta: float) -> float:
+         assert self._store is not None
+         async with self._store.lock:
+-            record = await self._store.get(ref.person_id) or self._new_record(ref)
++            record = await self._store.get(ref.card_key) or self._new_record(ref)
+             self._sync_identity(record, ref)
+             if dim_key == "total":
+                 record.total += delta
+@@ -2957,7 +3013,7 @@ class AffinityPlugin(MaiBotPlugin):
+     async def _set_value(self, ref: PersonRef, dim_key: str, value: float) -> tuple[float, float]:
+         assert self._store is not None
+         async with self._store.lock:
+-            record = await self._store.get(ref.person_id) or self._new_record(ref)
++            record = await self._store.get(ref.card_key) or self._new_record(ref)
+             self._sync_identity(record, ref)
+             if dim_key == "total":
+                 old = record.total
+@@ -2971,7 +3027,7 @@ class AffinityPlugin(MaiBotPlugin):
+ 
+     def _new_record(self, ref: PersonRef) -> AffinityRecord:
+         return AffinityRecord(
+-            person_id=ref.person_id,
++            person_id=ref.card_key,
+             platform=ref.platform,
+             user_id=ref.user_id,
+             display_name=ref.display_name,
+@@ -3073,7 +3129,7 @@ class AffinityPlugin(MaiBotPlugin):
+         note_limit = _eint(desc_cfg.impression_note_size_limit, DEFAULT_IMPRESSION_NOTE_SIZE_LIMIT, minimum=1)
+         persistent = _ebool(desc_cfg.persistent_impression, DEFAULT_PERSISTENT_IMPRESSION)
+         async with self._store.lock:
+-            record = await self._store.get(ref.person_id) or self._new_record(ref)
++            record = await self._store.get(ref.card_key) or self._new_record(ref)
+             self._sync_identity(record, ref)
+             if mode == "append":
+                 base = record.description.rstrip()
+@@ -3084,7 +3140,7 @@ class AffinityPlugin(MaiBotPlugin):
+             used_chars = len(record.description)
+             used_bytes = _text_byte_len(record.description)
+             await self._store.upsert(record)
+-        self._maybe_schedule_storage_compact(ref.person_id, ref.display_name, record.description)
++        self._maybe_schedule_storage_compact(ref.card_key, ref.display_name, record.description)
+         action = "已追加到" if mode == "append" else "已覆盖"
+         if persistent:
+             msg = (
+@@ -3287,22 +3343,22 @@ class AffinityPlugin(MaiBotPlugin):
+             return {"content": error or "解析对象失败。"}
+         if self._store is None:
+             return {"content": "印象档案还没准备好。"}
+-        existing = await self._store.get(ref.person_id)
++        existing = await self._store.get(ref.card_key)
+         if existing is None:
+             return {"content": "还没有这个人的印象档案。"}
+-        if ref.person_id in self._nudge_inflight:
++        if ref.card_key in self._nudge_inflight:
+             return {
+                 "content": (
+                     f"对 {ref.display_name} 的印象微调已在后台进行。"
+                     "不必再次调用，也不必向用户说明。"
+                 )
+             }
+-        self._nudge_inflight.add(ref.person_id)
++        self._nudge_inflight.add(ref.card_key)
+         stream_id = _resolve_stream_id(kwargs)
+         try:
+             self._schedule(self._nudge_record_in_background(ref, stream_id))
+         except Exception:
+-            self._nudge_inflight.discard(ref.person_id)
++            self._nudge_inflight.discard(ref.card_key)
+             raise
+         return {
+             "content": (
+@@ -3469,7 +3525,7 @@ class AffinityPlugin(MaiBotPlugin):
+             return False, error or "解析对象失败", 2
+         try:
+             if self._store is not None:
+-                existing = await self._store.get(ref.person_id)
++                existing = await self._store.get(ref.card_key)
+                 if should_light_nudge_on_card(
+                     enabled=self._light_refresh_enabled,
+                     has_record=existing is not None,
+@@ -3567,10 +3623,10 @@ class AffinityPlugin(MaiBotPlugin):
+     # ------------------------------------------------------------------ #
+     async def _refresh_record(self, ref: PersonRef, stream_id: str) -> AffinityRecord:
+         assert self._store is not None
+-        existing = await self._store.get(ref.person_id)
++        existing = await self._store.get(ref.card_key)
+         record = await self._generate_record(ref, stream_id, existing=existing)
+         await self._store.upsert(record)
+-        self._maybe_schedule_storage_compact(ref.person_id, ref.display_name, record.description)
++        self._maybe_schedule_storage_compact(ref.card_key, ref.display_name, record.description)
+         return record
+ 
+     async def _nudge_record_in_background(self, ref: PersonRef, stream_id: str) -> None:
+@@ -3585,7 +3641,7 @@ class AffinityPlugin(MaiBotPlugin):
+             )
+             return
+         finally:
+-            self._nudge_inflight.discard(ref.person_id)
++            self._nudge_inflight.discard(ref.card_key)
+         if outcome.missing:
+             self.ctx.logger.info("后台微调跳过：尚无档案 person_id=%s", ref.person_id)
+             return
+@@ -3603,9 +3659,9 @@ class AffinityPlugin(MaiBotPlugin):
+ 
+     async def _nudge_record(self, ref: PersonRef, stream_id: str) -> NudgeOutcome:
+         assert self._store is not None
+-        lock = self._gen_locks.setdefault(ref.person_id, asyncio.Lock())
++        lock = self._gen_locks.setdefault(ref.card_key, asyncio.Lock())
+         async with lock:
+-            existing = await self._store.get(ref.person_id)
++            existing = await self._store.get(ref.card_key)
+             if existing is None:
+                 return NudgeOutcome(
+                     record=None,
+@@ -3716,7 +3772,7 @@ class AffinityPlugin(MaiBotPlugin):
+                 await self._store.upsert(existing)
+                 if note_changed:
+                     self._maybe_schedule_storage_compact(
+-                        ref.person_id, ref.display_name, existing.description
++                        ref.card_key, ref.display_name, existing.description
+                     )
+             return NudgeOutcome(record=existing, applied=applied, note_changed=note_changed, error="")
+ 
