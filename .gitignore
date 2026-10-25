@@ -1,8 +1,10 @@
 # 运行时与凭据（绝不入仓）
-config/
-plugins/
-data/
-logs/
+# ⚠ 只忽略**实盘**配置文件，本仓库要发布的是 *.example.toml 模板
+/config/bot_config.toml
+/config/model_config.toml
+/plugins/
+/data/
+/logs/
 *.db
 *.sqlite3
 *.jsonl

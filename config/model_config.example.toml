@@ -1,0 +1,241 @@
+# ============================================================================
+#  ⚠ 这是**模板**，不是实盘配置。请复制成 config/bot_config.toml 再改。
+#  所有 <尖括号> 都是占位符，必须替换成你自己的值。
+#  本文件不含任何真实账号、密钥或 cookie。
+# ============================================================================
+
+[inner]
+version = "1.17.17"
+
+[[models]]
+model_identifier = "MiniMax-M3.1-Flash-Preview"
+model_type = "llm"
+name = "MiniMax-M3"
+api_provider = "MiniMax"
+price_in = 2.2
+price_out = 8.6
+cache_price_in = 0.4
+send_temperature = true
+visual = false
+force_stream_mode = false
+
+[models.extra_params]
+reasoning_effort = "high"
+
+[models.extra_params.thinking]
+type = "enabled"
+
+[[models]]
+model_identifier = "text-embedding-v3"
+model_type = "embedding"
+name = "text-embedding-v3"
+api_provider = "DashScope"
+# 2026-10-25：原来指本地 Ollama 的 bge-m3（Ollama-Local），
+# 但 16G 机器塞不下 Ollama（用户要求不起），而且
+# `[model_task_config.embedding].model_list` 本来就是**空数组**
+# → 记忆内核的向量化一直报「embedding 任务未配置模型」。
+# 改成走百炼的 text-embedding-v3（compatible-mode /embeddings，实测 dim=1024，
+# 与 bot_config 的 [a_memorix.embedding].dimension = 1024 对得上），本机零内存占用。
+price_in = 0.7
+price_out = 0
+cache_price_in = 0
+send_temperature = false
+visual = false
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "MiniMax-M3.1-Flash-Preview"
+model_type = "llm"
+name = "MiniMax-M3.1-Flash-Preview"
+api_provider = "MiniMax"
+price_in = 2.2
+price_out = 8.6
+cache_price_in = 0.4
+price_periods = []
+send_temperature = true
+visual = false
+force_stream_mode = false
+
+[models.extra_params.thinking]
+type = "adaptive"
+
+[[models]]
+model_identifier = "deepseek-flash"
+model_type = "llm"
+name = "deepseek-flash"
+api_provider = "DeepSeek"
+price_in = 1
+price_out = 2
+cache_price_in = 0
+price_periods = []
+send_temperature = true
+visual = true
+force_stream_mode = false
+
+[models.extra_params]
+reasoning_effort = "high"
+
+[models.extra_params.thinking]
+type = "enabled"
+
+[[models]]
+model_identifier = "deepseek-v4-pro"
+model_type = "llm"
+name = "deepseek-v4-pro"
+api_provider = "DeepSeek"
+price_in = 12
+price_out = 24
+cache_price_in = 0
+price_periods = []
+send_temperature = true
+visual = true
+force_stream_mode = false
+
+[models.extra_params]
+
+[[models]]
+model_identifier = "MiniMax-M3.1-Flash-Preview"
+model_type = "llm"
+name = "MiniMax-M3.1-Flash-Preview-nowrite"
+api_provider = "MiniMax"
+price_in = 2.2
+price_out = 8.6
+cache_price_in = 0.4
+price_periods = []
+send_temperature = true
+visual = false
+force_stream_mode = false
+
+[models.extra_params]
+reasoning_effort = "low"
+[model_task_config.replyer] # 回复模型，影响麦麦的回复表现
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 1 # 模型温度
+selection_strategy = "random" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 240 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.planner] # 规划模型，决定麦麦的行动，需要有一定Agent能力的模型
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 16384 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "random" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 180 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.memory] # 记忆模型配置，用于长期记忆总结、抽取、写回等高记忆任务；留空时由调用方按需回退
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.3 # 模型温度
+selection_strategy = "random" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 240 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.mid_memory] # 聊天回想模型配置；留空时自动继用 fast_model 模型，fast_model 留空时使用 utils 模型
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "random" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 180 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.utils] # 执行文本概括，整理等小任务，是麦麦必须的模型。可以选择速度快的小尺寸模型
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.5 # 模型温度
+selection_strategy = "random" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 120 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.learner] # 学习模型配置，用于表达方式学习和黑话学习；留空时用 utils 模型
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 120 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.fast_model] # 快速模型配置，用于表达方式选择、回复断句等需要快速完成的小任务，建议选择响应快的模型；留空时用 utils 模型
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 显式指定：response_splitter 的 LLM 断句走的就是这个 task（task_name="fast_model"）
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.3 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 120 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.emoji] # 表情包发送模型配置；留空时保持原有 planner/vlm 选择逻辑
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 120 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.vlm] # 视觉模型，需要能够识图的模型
+model_list = ["MiniMax-M3.1-Flash-Preview"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 240 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.voice] # 语音识别模型
+model_list = [] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 8192 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 120 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.embedding] # 嵌入模型；可选择文本或图片嵌入类型，不可使用 LLM，所选模型需支持文本向量化
+model_list = ["text-embedding-v3"] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 4096 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 60 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[model_task_config.image_embedding] # 图片嵌入模型；可选择文本或图片嵌入类型，不可使用 LLM，留空时不启用；所选模型必须实现图片输入到向量的协议
+model_list = [] # 使用的模型列表, 每个元素对应上面的模型名称(name)
+max_tokens = 4096 # 任务最大输出token数
+temperature = 0.7 # 模型温度
+selection_strategy = "balance" # 模型选择策略：balance（负载均衡）、random（随机选择）或 sequential（按配置顺序优先选择）
+hard_timeout = 60 # 任务硬超时（秒），到点未返回则取消请求并尝试切换下一个模型；防止上游代理静默排队导致主循环饥饿
+
+[[api_providers]]
+name = "MiniMax"
+base_url = "https://api.minimax.chat/v1"
+api_key = ""
+client_type = "openai"
+max_retry = 3
+timeout = 120
+retry_interval = 5
+
+[api_providers.default_headers]
+
+[api_providers.default_query]
+
+[[api_providers]]
+name = "Ollama-Local"
+base_url = "http://127.0.0.1:11434/v1"
+api_key = ""
+client_type = "openai"
+auth_type = "bearer"
+auth_header_name = "Authorization"
+auth_header_prefix = "Bearer"
+model_list_endpoint = "/models"
+max_retry = 2
+timeout = 120
+retry_interval = 3
+
+[api_providers.default_headers]
+
+[api_providers.default_query]
+
+[[api_providers]]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+api_key = ""
+client_type = "openai"
+
+[api_providers.default_headers]
+
+[[api_providers]]
+name = "DashScope"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = ""
+client_type = "openai"
+max_retry = 2
+timeout = 60
