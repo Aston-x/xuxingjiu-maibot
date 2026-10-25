@@ -123,8 +123,8 @@ def check_memory():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--maibot", default=r"G:\AI\许杏玖-MaiBot\MaiBot",
-                    help="MaiBot 根目录")
+    ap.add_argument("--maibot", default="MaiBot",
+                    help="MaiBot 根目录（默认按相对路径 ./MaiBot 找）")
     ap.add_argument("--repo", default=str(pathlib.Path(__file__).resolve().parent.parent),
                     help="本仓库根目录（用来找 config 模板）")
     args = ap.parse_args()
