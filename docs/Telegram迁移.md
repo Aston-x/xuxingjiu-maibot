@@ -9,6 +9,8 @@
 
 这个链接是维护者主页，不是机器人身份，也不能替代 Bot Token 或数字用户 ID。
 
+当前 Bot：[`@xuxingjiu_bot`](https://t.me/xuxingjiu_bot)（2026-11-10 创建并完成私聊实机验收）。
+
 ## 适配器选择
 
 | 方案 | 宿主要求 | 当前结论 |
@@ -62,9 +64,10 @@ git -C plugins/exynos967_telegram-adapter checkout 25a0183d9af86341a8d12df2c4c3f
 - 群聊和私聊都是 `whitelist`
 - 两个白名单都为空，表示暂时不接收任何 Telegram 消息
 
-网络前提：2026-11-10 本机直连 `https://api.telegram.org/` 超时（10 秒内未建立 TCP 连接），
-系统代理开关也处于关闭状态。接入前必须先准备一个可用的 HTTP/SOCKS5 代理，
-并在插件配置里显式填写；不要只依赖系统代理或环境变量。
+网络实测：Windows `curl.exe`/schannel 在 Nano TUN 下会出现 TLS 握手失败，
+但 MaiBot 插件使用的 Python/httpx 与只读探针可以正常访问 Bot API。
+2026-11-10 已用 `proxy_enabled = false` 完成 `getMe`、`getUpdates` 和私聊收发，
+因此当前不要求额外代理；以后更换网络环境时再重新验收。
 
 ### 2. 创建 Bot 并拿到数字身份
 
@@ -129,8 +132,10 @@ group_list = []
 
 ## 尚未完成
 
-- [ ] 获取 BotFather Token 与机器人数字 ID
-- [ ] 获取维护者 Telegram 数字 ID，并建立私聊白名单
+- [x] 获取 BotFather Token 与机器人数字 ID
+- [x] 机器人在 `getMe`、长轮询和私聊回复链路通过验收
+- [x] 建立首个 Telegram 私聊白名单并验证未知用户会被丢弃
+- [ ] 让维护者主号 `@jiyi2519` 向 Bot 发送 `/start`，取得数字 ID 后加入白名单
 - [ ] 决定群聊第一批白名单
 - [ ] 评估官方适配器所需的 MaiBot 升级与核心补丁重打
 - [ ] 为 QQ 空间、群管理、戳一戳等平台专属功能建立 Telegram 对应方案或明确下线
