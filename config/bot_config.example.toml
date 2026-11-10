@@ -8,7 +8,7 @@
 version = "8.15.4"
 
 [bot]
-platform = "qq" # 适配器没有上报身份时使用的备用主平台，例如 qq。
+platform = "qq" # 适配器没有上报身份时使用的备用主平台；也可用 telegram。
 qq_account = "<bot的QQ号>" # 适配器没有上报 QQ 身份时使用的备用账号 ID。
 platforms = [] # 其他平台的备用账号，格式为 platform:账号；适配器身份存在时不参与判断。
 nickname = "许杏玖" # 麦麦显示和自称时使用的名字。
@@ -68,10 +68,10 @@ value = 1
 
 [chat.reply_style] # 如何回复、引用回复与聊天 Prompt 配置。
 enable_reply_quote = true # 回复时是否可以引用上一条或相关消息。
-group_chat_prompt = "你正在qq群里聊天，下面是群里正在聊的内容，聊天中包含文字，图片和表情包等消息。\n回复尽量简短一些。最好一次对一个话题进行回复，但必须考虑不同群友发言之间的交互，免得啰嗦或者回复内容太乱。请注意把握聊天内容。\n不要总是提及自己的身份背景，根据聊天内容自由发挥，但是要日常不浮夸，不要刻意找话题。\n不用刻意回复其他人发送的表情包，只要关注表情包表达的含义。你可以适当发送表情包表达情绪。控制回复的频率，不要每个人的消息都回复，优先回复你感兴趣的或者主动提及你的，适当回复其他话题。"
+group_chat_prompt = "你正在群聊里聊天，下面是群里正在聊的内容，聊天中包含文字，图片和表情包等消息。\n回复尽量简短一些。最好一次对一个话题进行回复，但必须考虑不同群友发言之间的交互，免得啰嗦或者回复内容太乱。请注意把握聊天内容。\n不要总是提及自己的身份背景，根据聊天内容自由发挥，但是要日常不浮夸，不要刻意找话题。\n不用刻意回复其他人发送的表情包，只要关注表情包表达的含义。你可以适当发送表情包表达情绪。控制回复的频率，不要每个人的消息都回复，优先回复你感兴趣的或者主动提及你的，适当回复其他话题。"
 # 群聊通用提示词，告诉麦麦群聊中该怎么说话。
 
-private_chat_prompts = "你正在聊天，下面是正在聊的内容，其中包含聊天记录和聊天中的图片。\n回复尽量简短一些。请注意把握聊天内容。\n请考虑对方的发言频率，想法，思考自己何时回复以及回复内容。\n与宝宝聊天时除外"
+private_chat_prompts = "你正在聊天，下面是正在聊的内容，其中包含聊天记录和聊天中的图片。\n回复尽量简短一些。请注意把握聊天内容。\n请考虑对方的发言频率，想法，思考自己何时回复以及回复内容。"
 # 私聊通用提示词，告诉麦麦私聊中该怎么说话。
 chat_prompts = []
 
@@ -146,14 +146,14 @@ learn = true
 global_memory_sharing_enabled = false # 是否让普通记忆查询在所有聊天流范围内检索
 shared_memory_groups = [] # 把需要互相参考长期记忆的群聊或私聊放到同一组
 
-[a_memorix.plugin] # 长期记忆系统的总开关
-enabled = true # 是否启用长期记忆系统
+[a_memorix.plugin] # 宿主内置长期记忆系统的总开关
+enabled = false # 现行部署由独立 memfade 插件负责长期记忆，避免两套并行
 
 [a_memorix.integration] # 控制麦麦在聊天中如何使用长期记忆
-enable_memory_query_tool = true # 是否允许麦麦在聊天时查询长期记忆
+enable_memory_query_tool = false # 是否允许麦麦在聊天时查询宿主内置长期记忆
 memory_query_default_limit = 3 # 每次默认从长期记忆中取回多少条结果
 # （2026-10-21：原 5。召回越多越容易撞上同一件旧事）
-enable_person_profile_query_tool = true # 是否允许麦麦查询人物画像记忆
+enable_person_profile_query_tool = false # 是否允许麦麦查询宿主内置人物画像记忆
 enable_person_profile_injection = false # 是否在 Maisaka Planner 调用前自动注入当前对象相关的人物画像
 # （2026-10-21：原 true。人物画像是**全局聚合**、不按群组隔离的
 # —— CONFIG_REFERENCE.md 明确写了这一点。私聊里的人设会跟着画像进群，先关掉）
@@ -172,12 +172,12 @@ heuristic_memory_recall_min_new_messages = 120 # 两次自然拉起之间至少�
 heuristic_memory_recall_cache_ttl_seconds = 300 # 同一聊天流自然拉起结果的运行时缓存时间
 heuristic_memory_group_to_private_enabled = false # 私聊中是否允许自然拉起群聊记忆
 heuristic_memory_private_to_group_enabled = false # 群聊中是否允许自然拉起私聊记忆
-person_fact_writeback_enabled = true # 是否在发送回复后自动提取并写回人物事实到长期记忆
-chat_summary_writeback_enabled = true # 是否在 Maisaka 聊天过程中按消息窗口自动写回聊天摘要到长期记忆
+person_fact_writeback_enabled = false # 是否自动写回人物事实；memfade 模式下保持关闭
+chat_summary_writeback_enabled = false # 是否自动写回聊天摘要；memfade 模式下保持关闭
 chat_summary_writeback_message_threshold = 60 # 自动写回聊天摘要的消息窗口阈值（2026-10-21：原 36。
 # 段落（摘要）**没有衰减机制**，衰减只作用于关系，所以写得越多忘得越慢。提高门槛 = 少写小事）
 chat_summary_writeback_context_length = 24 # 自动写回聊天摘要时，从聊天流中回看的消息条数（2026-10-21：原 36）
-fuzzy_modify_enabled = true # 是否启用自然语言记忆修正的后台接口
+fuzzy_modify_enabled = false # 是否启用宿主内置自然语言记忆修正接口；memfade 模式下保持关闭
 fuzzy_modify_auto_execute_enabled = false # 是否允许高置信记忆修正跳过人工确认自动执行
 fuzzy_modify_confirm_threshold = 0.85 # 记忆修正建议进入自动确认判定时使用的置信度阈值
 fuzzy_modify_candidate_limit = 20 # 每次记忆修正交给 LLM 的候选记忆上限
@@ -544,7 +544,7 @@ allow_url = false # 是否允许 MCP 服务器请求打开 URL。
 # 要连接的 MCP 服务器列表。
 
 [plugin]
-permission = ["<你的QQ号>"] # 允许用聊天命令管理插件的用户，格式如 qq:123456789。
+permission = ["<你的QQ号>"] # 允许用聊天命令管理插件的用户，格式如 qq:<user-id>。
 silent_permission_denied = false # 开启后，用户执行无权限命令时不再发送提示消息，仅静默拦截并记录日志。
 command_permissions = {"builtin.plugin-management.management" = {allow_users = ["<你的QQ号>"], allow_chats = []}} # 受保护命令按用户和真实聊天流配置的额外放行规则。
 disabled_commands = [] # 在命令管理中停用的命令 ID 列表（格式为 plugin_id.command_name，内置命令为 core.clear）。

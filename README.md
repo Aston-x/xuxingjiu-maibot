@@ -6,6 +6,11 @@
 
 [English](README.md) · [中文](README.zh-CN.md)
 
+> **Status (2026-11-10):** the QQ side has received its final public sync. SnowLuma is now
+> private and no longer updated, but the existing QQ bot stays online until the Telegram
+> migration passes acceptance. Telegram will be added in parallel first. Maintainer:
+> [`@jiyi2519`](https://t.me/jiyi2519).
+
 ---
 
 ## Why the rewrite happened
@@ -62,7 +67,7 @@ rules all carried over unchanged — they were never the problem.
 |---|---|---|
 | QQ protocol end | we owned it (and the ban risk) | swapped to SnowLuma; MaiBot only speaks OneBot v11 |
 | plugin ecosystem | we wrote everything, including the diary plugin | 400+ plugins on the marketplace; we deleted our hand-written diary plugin and used the official one |
-| memory | our own JSON store | A_Memorix: two-layer retrieval, **session-scoped by design**, summarisation, decay policy |
+| memory | our own JSON store | the live deployment later moved to **memfade**: session-scoped storage, write-time guards, and time-based fading |
 | upgrades | every upstream QQ change was our bug | follow upstream `dev`; `v1.3.9 → v1.3.14` during this rewrite alone |
 | licence | GPL-3.0 | GPL-3.0 |
 
@@ -80,7 +85,7 @@ entries, no persona text.**
 
 ```
 config/     sanitized config templates (every secret is "")
-patches/    the four patches this deployment needs on top of upstream MaiBot
+patches/    the six patches this QQ deployment needs on top of upstream MaiBot
 scripts/    launch + environment-check scripts (paths are placeholders)
 docs/       the rewrite rationale, architecture, and patch notes
 ```
@@ -90,9 +95,9 @@ voice-pipeline write-ups live in the deployment repo, not here.
 
 ---
 
-## The four patches
+## The six patches
 
-All four are small and local. See [`docs/插件补丁说明.md`](docs/插件补丁说明.md).
+All six are small and local. See [`docs/插件补丁说明.md`](docs/插件补丁说明.md).
 
 1. `core-platform-io-group-target-fallback.patch` — a group chat's outbound message does
    not always carry `group_info` (plugin-triggered proactive messages don't). The original
@@ -104,12 +109,18 @@ All four are small and local. See [`docs/插件补丁说明.md`](docs/插件补�
    command messages, so system notices stop feeding back into her own memory.
 3. `plugin-impression-card-session-scope.patch` — the impression card was stored **per
    person, shared across every chat**. Private-chat details therefore leaked into group
-   context (the group's planner literally read "20块, 私聊黏人, 四个赞, 炸鸡"). Cards are
-   now keyed `person_id#session_id`.
+   context. The public notes deliberately omit transcripts and concrete private facts.
+   Cards are now keyed `person_id#session_id`.
 4. `plugin-better-diary-continuity-scope.patch` — the cross-day "continuity" state was one
    global file, so a diary written from private material leaked into the next group's
    diary and got published to a public feed. Continuity is now bucketed per
    `target_chats`.
+5. `core-profile-dedup-cross-section.patch` — profile bullets used exact-string deduplication
+   only, so the same fact could reappear in several sections after a paraphrase. The patch
+   adds near-duplicate detection, numeric safeguards, and cross-section deduplication.
+6. `core-memory-extraction-temporal-guard.patch` — fact extraction could promote a one-off
+   event into a long-term fact. The prompt now requires a currently valid state and asks for
+   each fact only once.
 
 ---
 
@@ -135,6 +146,9 @@ git apply /path/to/xuxingjiu-maibot/patches/core-platform-io-group-target-fallba
 
 `scripts/check_env.py` verifies the ports, the plugin load count and whether every
 credential you left blank is still blank.
+
+QQ can keep running; Telegram is added as a parallel adapter. See
+[`docs/Telegram迁移.md`](docs/Telegram迁移.md) for the staged rollout.
 
 ---
 

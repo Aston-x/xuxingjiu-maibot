@@ -1,0 +1,171 @@
+diff --git a/src/A_memorix/core/utils/profile_text.py b/src/A_memorix/core/utils/profile_text.py
+index ec82bf62d..142a34f29 100644
+--- a/src/A_memorix/core/utils/profile_text.py
++++ b/src/A_memorix/core/utils/profile_text.py
+@@ -2,8 +2,9 @@
+ 
+ from __future__ import annotations
+ 
+-from typing import Dict, Iterable, List
+-
++import difflib
++import re
++from typing import Dict, Iterable, List, Sequence
+ 
+ PROFILE_SECTION_TITLES = (
+     "身份设定",
+@@ -27,6 +28,21 @@ PROFILE_REQUIRED_PREFIX = "# 人物画像"
+ PROFILE_EMPTY_ITEM = "- 暂无"
+ PROFILE_MAINTENANCE_NOTE = "- 自动画像仅供内部参考；若与当前对话冲突，以当前对话为准。"
+ 
++# 2026-10-30（历史反馈：画像里重复语段过多）：
++#   事实抽取是 LLM 干的，同一件事换个标点/语序就会生成**新的一条 claim**
++#   （实测同一事实会被存成多条近似 claim）。原来只按**整串相等**去重，
++#   于是同一件事会在画像里出现 2~4 次、还散落在不同板块。
++#   这里加一层「近似判定」：字面不同、但说的是同一件事的，也要只留一条。
++NEAR_DUP_MIN_CHARS = 12
++"""参与近似判定的最短字数（归一化后）。太短的句子不参与，
++避免「A 喜欢猫」与「A 喜欢狗」这类不同事实被误判成同一件事。"""
++
++NEAR_DUP_RATIO = 0.42
++"""字符序列相似度阈值（difflib）。"""
++
++NEAR_DUP_JACCARD = 0.62
++"""字符集 Jaccard 阈值。用来抓「语序不同但用词高度重合」的那类改写。"""
++
+ 
+ def clean_profile_bullet(value: object) -> str:
+     """规范化单条画像要点，同时保留文本可编辑性。"""
+@@ -41,8 +57,77 @@ def clean_profile_bullet(value: object) -> str:
+     return f"- {text}"
+ 
+ 
+-def dedupe_profile_bullets(values: Iterable[object], *, limit: int) -> List[str]:
+-    """去重并裁剪画像要点列表。"""
++def _normalize_for_compare(text: object, *, strip_terms: Sequence[str] = ()) -> str:
++    """去掉标点空白后的小写串，用于相似度比较。
++
++    ``strip_terms`` 一般传人物称呼（主称呼 / 人物ID）——
++    每个人的要点都带同一个名字，它会把「同一个人」的两条不同事实
++    强行拉近（「A 喜欢猫」/「A 喜欢狗」的字面相似度很高），
++    比较前先摘掉才靠得住。
++    """
++
++    cleaned = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(text or "")).lower()
++    for term in strip_terms:
++        stripped = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(term or "")).lower()
++        if len(stripped) >= 2:
++            cleaned = cleaned.replace(stripped, "")
++    return cleaned
++
++
++def _digit_signature(text: object) -> str:
++    """取文本里的阿拉伯数字串。用来挡住「只差一个数字」的不同事实。"""
++
++    return "".join(ch for ch in str(text or "") if ch.isdigit())
++
++
++def bullets_are_similar(left: object, right: object, *, strip_terms: Sequence[str] = ()) -> bool:
++    """判断两条要点是不是在说同一件事。
++
++    用两个互补的判据（任一命中即算近似）：
++
++    1. **字符序列相似度**（difflib，跑在**原文**上）—— 抓只换了语序的改写；
++    2. **字符集 Jaccard**（跑在**去掉称呼**的文本上）—— 抓语序差很多、
++       但用词高度重合的改写。
++       之所以第二个判据要去称呼：每个人的要点都带同一个名字，
++       它会把「同一个人」的两条不同事实强行拉近。
++
++    两个判据都会跳过太短的句子，避免把只差一两个字的不同事实合并掉；
++    **数字不同的一律不算重复**（「有 3 张卡」与「有 5 张卡」字面极像，
++    但它们是两件事）。
++    """
++
++    left_raw = _normalize_for_compare(left)
++    right_raw = _normalize_for_compare(right)
++    if len(left_raw) < NEAR_DUP_MIN_CHARS or len(right_raw) < NEAR_DUP_MIN_CHARS:
++        return False
++    if _digit_signature(left_raw) != _digit_signature(right_raw):
++        return False
++    if difflib.SequenceMatcher(None, left_raw, right_raw).ratio() >= NEAR_DUP_RATIO:
++        return True
++    left_chars = set(_normalize_for_compare(left, strip_terms=strip_terms))
++    right_chars = set(_normalize_for_compare(right, strip_terms=strip_terms))
++    union = left_chars | right_chars
++    if not union:
++        return False
++    return len(left_chars & right_chars) / len(union) >= NEAR_DUP_JACCARD
++
++
++def dedupe_profile_bullets(
++    values: Iterable[object],
++    *,
++    limit: int,
++    strip_terms: Sequence[str] = (),
++    accepted: Sequence[str] = (),
++) -> List[str]:
++    """去重并裁剪画像要点列表。
++
++    去重分三层：
++    1. 去掉空项与「- 暂无」；
++    2. **整串相同**的直接丢；
++    3. **说的是同一件事**（措辞不同）也丢（见 :func:`bullets_are_similar`）。
++
++    ``accepted`` 传入已经收下的要点（用于跨板块去重：同一件事不允许在两个板块各出现一次）。
++    """
+ 
+     bullets: List[str] = []
+     seen = set()
+@@ -53,6 +138,11 @@ def dedupe_profile_bullets(values: Iterable[object], *, limit: int) -> List[str]
+         key = bullet.lower()
+         if key in seen:
+             continue
++        # 同一板块内已收下的要点 + 跨板块已收下的要点，都要拿来比近似
++        if any(bullets_are_similar(bullet, item, strip_terms=strip_terms) for item in bullets):
++            continue
++        if any(bullets_are_similar(bullet, item, strip_terms=strip_terms) for item in accepted):
++            continue
+         seen.add(key)
+         bullets.append(bullet)
+         if len(bullets) >= max(1, int(limit)):
+@@ -82,15 +172,31 @@ def build_structured_profile_text(
+     """构建固定格式的人物画像文本。"""
+ 
+     alias_text = "、".join(str(item or "").strip() for item in aliases if str(item or "").strip())
+-    sections = {
+-        "身份设定": dedupe_profile_bullets(identity_settings, limit=4),
+-        "关系设定": dedupe_profile_bullets(relationship_settings, limit=4),
+-        "稳定了解": dedupe_profile_bullets(stable_facts, limit=6),
+-        "相处偏好": dedupe_profile_bullets(interaction_preferences, limit=5),
+-        "近期互动": dedupe_profile_bullets(recent_interactions, limit=3),
+-        "不确定信息": dedupe_profile_bullets(uncertain_notes, limit=3),
+-        "维护备注": [PROFILE_MAINTENANCE_NOTE],
+-    }
++    # 比较时先摘掉称呼/ID，避免「同一个名字」把不同事实拉近
++    strip_terms = tuple(
++        term for term in (str(person_id or "").strip(), str(primary_name or "").strip()) if term
++    )
++    # 跨板块去重：同一件事只允许出现在**第一个**板块里。
++    # （原来每个板块各自去重 → 「稳定了解」和「关系设定」能各写一遍同一件事。）
++    accepted: List[str] = []
++    sections: Dict[str, List[str]] = {}
++    for title, values, limit in (
++        ("身份设定", identity_settings, 4),
++        ("关系设定", relationship_settings, 4),
++        ("稳定了解", stable_facts, 6),
++        ("相处偏好", interaction_preferences, 5),
++        ("近期互动", recent_interactions, 3),
++        ("不确定信息", uncertain_notes, 3),
++    ):
++        section = dedupe_profile_bullets(
++            values,
++            limit=limit,
++            strip_terms=strip_terms,
++            accepted=accepted,
++        )
++        sections[title] = section
++        accepted.extend(section)
++    sections["维护备注"] = [PROFILE_MAINTENANCE_NOTE]
+ 
+     lines = [
+         PROFILE_REQUIRED_PREFIX,

@@ -5,6 +5,10 @@
 
 [English](README.md) · [中文](README.zh-CN.md)
 
+> **状态（2026-11-10）**：QQ 侧已完成最后一轮公开同步。SnowLuma 已转为私有且不再更新，
+> 但现有 QQ 机器人在迁移验收前继续在线；Telegram 适配会以并行方式加入，不会先切断 QQ。
+> 项目维护者的 Telegram：[`@jiyi2519`](https://t.me/jiyi2519)。
+
 ---
 
 ## 为什么要重写
@@ -51,7 +55,7 @@ OneBot 客户端、插件系统、模型调度、记忆内核、WebUI、规划�
 |---|---|---|
 | QQ 控制端 | 自己扛（连带封号风险） | 换成 SnowLuma；MaiBot 只负责讲 OneBot v11 |
 | 插件生态 | 全靠自己写，连日记插件都是手写的 | 市场 400+ 插件；手写日记插件直接删掉换官方 better-diary |
-| 记忆 | 自己写的 JSON 存储 | A_Memorix：双层检索、**天生按会话隔离**、摘要化、衰减策略 |
+| 记忆 | 自己写的 JSON 存储 | 现行部署已改为独立的 **memfade**：按会话作用域存取、写入前守卫、按时间淡化 |
 | 升级 | QQ 上游每次变动都是我们的 bug | 跟上游 `dev`；光这次重写就从 v1.3.9 走到 v1.3.14 |
 | 许可 | GPL-3.0 | GPL-3.0 |
 
@@ -68,7 +72,7 @@ v1.2 的代码树仍然活着，归档在
 
 ```
 config/     脱敏配置模板（所有密钥都是空的）
-patches/    这套部署在上游 MaiBot 之上需要的四个补丁
+patches/    这套 QQ 部署在上游 MaiBot 之上需要的六个补丁
 scripts/    启动脚本 + 环境体检脚本（路径都是占位符）
 docs/       重写原因、架构、补丁说明
 ```
@@ -77,9 +81,9 @@ docs/       重写原因、架构、补丁说明
 
 ---
 
-## 四个补丁
+## 六个补丁
 
-四个都很小、都很局部。详见 [`docs/插件补丁说明.md`](docs/插件补丁说明.md)。
+六个都很小、都很局部。详见 [`docs/插件补丁说明.md`](docs/插件补丁说明.md)。
 
 1. `core-platform-io-group-target-fallback.patch` —— 群聊的出站消息**不一定带 `group_info`**
    （插件主动触发的那条就没有）。原代码于是把它判成 `chat_type=private` 且目标为空，
@@ -88,11 +92,15 @@ docs/       重写原因、架构、补丁说明
 2. `core-memory-summary-filter.patch` —— 摘要器现在过滤掉 bot 消息与命令消息，
    系统通知不再回灌进她自己的记忆。
 3. `plugin-impression-card-session-scope.patch` —— 印象卡片原本**按人存一份、所有会话共用**，
-   于是私聊细节漏进群上下文（群里的 planner 直接读到了「20块, 私聊黏人, 四个赞, 炸鸡」）。
+   于是私聊里的事实会漏进群上下文。公开说明只保留问题类型，不复制任何聊天内容。
    现在卡片主键改成 `person_id#session_id`。
 4. `plugin-better-diary-continuity-scope.patch` —— 跨天「连续性」状态原本是**一个全局文件**，
    从私聊取材写的日记会把私聊事实带进下一篇群日记，并跟着正文**公开发到空间**。
    现在连续性按 `target_chats` 分桶。
+5. `core-profile-dedup-cross-section.patch` —— 人物画像原先只做整串去重，
+   同一件事换个语序就会在多个板块重复出现。现在增加近似去重、数字保护与跨板块去重。
+6. `core-memory-extraction-temporal-guard.patch` —— 事实抽取原先容易把一次性事件写成长期事实。
+   现在提示词明确要求只提取当前仍成立的状态，并要求同一件事只输出一次。
 
 ---
 
@@ -117,6 +125,9 @@ git apply /path/to/xuxingjiu-maibot/patches/core-platform-io-group-target-fallba
 ```
 
 `scripts/check_env.py` 会检查端口、插件加载数量，以及你留空的凭据是不是真的还空着。
+
+QQ 仍可继续运行；Telegram 是并行新增的适配器。具体接法与迁移顺序见
+[`docs/Telegram迁移.md`](docs/Telegram迁移.md)。
 
 ---
 

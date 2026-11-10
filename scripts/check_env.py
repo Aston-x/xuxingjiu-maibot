@@ -26,15 +26,19 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 PORTS = [
     (3000, "OneBot HTTP（SnowLuma / NapCat）"),
     (3001, "OneBot WS（SnowLuma / NapCat）"),
-    (8000, "MaiBot 主服务"),
+    (8000, "MaiBot 旧版 WS（通常不单独监听）"),
     (8001, "MaiBot WebUI"),
     (9880, "GPT-SoVITS api_v2"),
     (8188, "ComfyUI（画图后端，可选）"),
-    (11434, "Ollama（本地 embedding，16G 机器建议改云端）"),
+    (18650, "MaiWork 控制台（可选）"),
 ]
 SECRET_RX = re.compile(
     r'(api_key|token|p_skey|skey|secret|password)\s*=\s*"([^"]+)"', re.I)
-QQID_RX = re.compile(r"\b(?:1[3-9]\d{8,9}|2\d{8,9})\b")
+TELEGRAM_TOKEN_RX = re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{25,}\b")
+ACCOUNT_ID_RX = re.compile(r"(?<!\d)-?\d{8,14}(?!\d)")
+ACCOUNT_FIELD_RX = re.compile(
+    r"(?im)^\s*(?:qq_account|platforms|private_list|group_list|ban_user_id|permission|allow_users|item_id)\s*=\s*.*$"
+)
 PLACEHOLDER_RX = re.compile(r"<[^>]{1,40}>")
 
 ok = True
@@ -49,7 +53,7 @@ def check_port(port, label):
     finally:
         s.close()
     mark = "OK  " if alive else "空闲"
-    if not alive and port in (3000, 3001, 8000, 8001):
+    if not alive and port in (3000, 8001):
         ok = False
     print(f"  [{mark}] {port:<6} {label}")
     return alive
@@ -96,16 +100,20 @@ def check_templates(repo: pathlib.Path):
         t = f.read_text(encoding="utf-8", errors="replace")
         filled = [(m.group(1), m.group(2)[:8] + "...") for m in SECRET_RX.finditer(t)
                   if m.group(2) and not PLACEHOLDER_RX.match(m.group(2))]
-        ids = sorted(set(QQID_RX.findall(t)))
-        if filled or ids:
+        telegram_tokens = sorted(set(TELEGRAM_TOKEN_RX.findall(t)))
+        account_fields = "\n".join(ACCOUNT_FIELD_RX.findall(t))
+        ids = sorted(set(ACCOUNT_ID_RX.findall(account_fields)))
+        if filled or telegram_tokens or ids:
             ok = False
             print(f"  [FAIL] {f.name} 里有不该出现的东西：")
             for k, v in filled[:5]:
                 print(f"        {k} = {v}")
+            if telegram_tokens:
+                print("        发现疑似 Telegram Bot Token")
             if ids:
-                print(f"        疑似真实 QQ 号: {ids[:5]}")
+                print(f"        疑似真实账号 / 群 ID: {ids[:5]}")
         else:
-            print(f"  [OK  ] {f.name} 干净（凭据全空、无真实 QQ 号）")
+            print(f"  [OK  ] {f.name} 干净（凭据全空、无真实账号 ID）")
 
 
 def check_memory():
@@ -127,11 +135,16 @@ def main():
                     help="MaiBot 根目录（默认按相对路径 ./MaiBot 找）")
     ap.add_argument("--repo", default=str(pathlib.Path(__file__).resolve().parent.parent),
                     help="本仓库根目录（用来找 config 模板）")
+    ap.add_argument("--skip-ports", action="store_true",
+                    help="跳过端口检查（只核对仓库与模板时使用）")
     args = ap.parse_args()
 
-    print("=== 1. 端口 ===")
-    for p, label in PORTS:
-        check_port(p, label)
+    if args.skip_ports:
+        print("=== 1. 端口（已跳过） ===")
+    else:
+        print("=== 1. 端口 ===")
+        for p, label in PORTS:
+            check_port(p, label)
 
     print("\n=== 2. 插件加载 ===")
     check_plugins(pathlib.Path(args.maibot))

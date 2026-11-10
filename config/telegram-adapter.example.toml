@@ -1,0 +1,26 @@
+# Telegram adapter template for MaiBot.
+# This file is intentionally inert: the adapter is off, the token is empty,
+# and both chat lists are empty whitelists.
+
+[plugin]
+enabled = false
+config_version = "0.1.0"
+
+[telegram_bot]
+token = ""
+api_base = "https://api.telegram.org"
+poll_timeout = 20
+proxy_enabled = false
+proxy_url = ""
+proxy_from_env = false
+
+[chat]
+# The numeric user ID must be learned after the owner sends /start to the bot.
+# https://t.me/jiyi2519 is a public profile link, not an authorization credential.
+private_list_type = "whitelist"
+private_list = []
+
+# Keep groups closed until private chat and QQ coexistence both pass acceptance.
+group_list_type = "whitelist"
+group_list = []
+ban_user_id = []
