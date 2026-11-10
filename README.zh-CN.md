@@ -6,7 +6,8 @@
 [English](README.md) · [中文](README.zh-CN.md)
 
 > **状态（2026-11-10）**：QQ 侧已完成最后一轮公开同步。SnowLuma 已转为私有且不再更新，
-> 但现有 QQ 机器人在迁移验收前继续在线；Telegram 适配会以并行方式加入，不会先切断 QQ。
+> 但 QQ 侧不封禁、不切走；当前是否在线由既有启动器状态决定。Telegram 以并行方式加入，
+> 不会先删除 QQ 链路。
 > Telegram Bot：[`@xuxingjiu_bot`](https://t.me/xuxingjiu_bot)；
 > 项目维护者：[`@jiyi2519`](https://t.me/jiyi2519)。
 

@@ -7,8 +7,8 @@
 [English](README.md) · [中文](README.zh-CN.md)
 
 > **Status (2026-11-10):** the QQ side has received its final public sync. SnowLuma is now
-> private and no longer updated, but the existing QQ bot stays online until the Telegram
-> migration passes acceptance. Telegram will be added in parallel first. Maintainer:
+> private and no longer updated, but the QQ path is retained and is not being cut over;
+> whether it is currently running depends on the existing launcher. Telegram is added in parallel. Maintainer:
 > [`@jiyi2519`](https://t.me/jiyi2519). Telegram bot:
 > [`@xuxingjiu_bot`](https://t.me/xuxingjiu_bot).
 
