@@ -9,7 +9,11 @@
 
 这个链接是维护者主页，不是机器人身份，也不能替代 Bot Token 或数字用户 ID。
 
-当前 Bot：[`@xuxingjiu_bot`](https://t.me/xuxingjiu_bot)（2026-11-10 创建并完成私聊实机验收）。
+当前 Bot：[`@xuxingjiu_bot`](https://t.me/xuxingjiu_bot)（2026-11-10 创建）。
+
+> 身份红线：**Master 只能是季怡**。QQ 侧标识是 `1738157278`，Telegram 侧是
+> `@jiyi2519`。`@XuXingjiu` 是给许杏玖注册的 Telegram 账号，不是主人。
+> 临时测试后该账号已从私聊白名单移除，当前 Telegram 私聊白名单为空。
 
 ## 适配器选择
 
@@ -134,7 +138,8 @@ group_list = []
 
 - [x] 获取 BotFather Token 与机器人数字 ID
 - [x] 机器人在 `getMe`、长轮询和私聊回复链路通过验收
-- [x] 建立首个 Telegram 私聊白名单并验证未知用户会被丢弃
+- [x] 用临时测试账号验证私聊收发与未知用户丢弃
+- [x] 发现私聊场景会误称测试账号为 Master 后，立即移除该白名单并更新主人身份守卫
 - [ ] 让维护者主号 `@jiyi2519` 向 Bot 发送 `/start`，取得数字 ID 后加入白名单
 - [ ] 决定群聊第一批白名单
 - [ ] 评估官方适配器所需的 MaiBot 升级与核心补丁重打
