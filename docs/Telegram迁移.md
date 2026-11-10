@@ -79,6 +79,15 @@ git -C plugins/exynos967_telegram-adapter checkout 25a0183d9af86341a8d12df2c4c3f
 先给机器人发 `/start`，再用 Bot API 的 `getUpdates` 或适配器日志确认发送者的数字 ID。
 **不要把 `@username` 当授权凭据**：Telegram 的用户名可以改，白名单应使用稳定的数字 ID。
 
+仓库提供了一个只读探针，不会打印 Token，也不会推进 offset。插件保持关闭时运行：
+
+```powershell
+<MaiBot>\.venv\Scripts\python.exe <xuxingjiu-maibot>\scripts\telegram_probe.py `
+  --plugin-config <MaiBot>\plugins\exynos967_telegram-adapter\config.toml
+```
+
+它会输出 Bot 数字 ID、待处理私聊的用户 ID 和群 `chat_id`，可直接用于白名单候选。
+
 拿到后进行最小放行：
 
 ```toml
